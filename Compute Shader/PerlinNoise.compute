@@ -1,0 +1,58 @@
+// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel CSMain
+
+// Create a RenderTexture with enableRandomWrite flag and set it
+// with cs.SetTexture
+RWTexture2D<float4> Result;
+float NoiseScale;
+int Octaves;
+float Peresisteance;
+float Lacunarity;
+float2 Offset;
+float Size;
+
+float2 unity_gradientNoise_dir(float2 p)
+{
+    p = p % 289;
+    float x = (34 * p.x + 1) * p.x % 289 + p.y;
+    x = (34 * x + 1) * x % 289;
+    x = frac(x / 41) * 2 - 1;
+    return normalize(float2(x - floor(x + 0.5), abs(x) - 0.5));
+}
+
+float unity_gradientNoise(float2 p)
+{
+    float2 ip = floor(p);
+    float2 fp = frac(p);
+    float d00 = dot(unity_gradientNoise_dir(ip), fp);
+    float d01 = dot(unity_gradientNoise_dir(ip + float2(0, 1)), fp - float2(0, 1));
+    float d10 = dot(unity_gradientNoise_dir(ip + float2(1, 0)), fp - float2(1, 0));
+    float d11 = dot(unity_gradientNoise_dir(ip + float2(1, 1)), fp - float2(1, 1));
+    fp = fp * fp * fp * (fp * (fp * 6 - 15) + 10);
+    return lerp(lerp(d00, d01, fp.y), lerp(d10, d11, fp.y), fp.x);
+}
+
+void Unity_GradientNoise_float(float2 UV, float Scale, out float Out)
+{
+    Out = unity_gradientNoise(UV * Scale) + 0.5;
+}
+
+[numthreads(8,8,1)]
+void CSMain (uint3 id : SV_DispatchThreadID)
+{
+    float num;
+    float res;
+    float P = 1;
+    float L = 1;
+    for (int i = 0; i < Octaves; i++)
+    {
+        Unity_GradientNoise_float(float2(id.x + 10000 + Offset.x, id.y + 10000 + Offset.y), (NoiseScale / L) / Size, num);
+        res += (num * P);
+        P *= Peresisteance;
+        L *= Lacunarity;
+    }
+    res /= 2;
+    
+    Result[id.xy] = float4(res, 0, 0, 0);
+    
+}
